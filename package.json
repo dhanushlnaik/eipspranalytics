@@ -1,0 +1,32 @@
+{
+  "name": "pr-attention-analyzer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Analysis tool for Ethereum EIPs/ERCs/RIPs PR editor attention status",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "analyze": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "mongo:import": "node dist/mongo/import-job.js",
+    "mongo:charts": "node dist/mongo/charts-job.js",
+    "mongo:sync": "node dist/mongo/import-job.js && node dist/mongo/charts-job.js",
+    "mongo:scheduler": "node dist/mongo/scheduler.js",
+    "api:boards": "node dist/api/board-server.js"
+  },
+  "dependencies": {
+    "@octokit/rest": "^21.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "mongoose": "^8.8.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.9.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
