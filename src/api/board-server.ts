@@ -33,6 +33,29 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+app.get("/api/boards/:spec/aggregation", async (req: Request, res: Response) => {
+  const spec = (req.params.spec ?? "").toLowerCase();
+  const model = SPEC_TO_MODEL[spec];
+  if (!model) {
+    res.status(400).json({
+      error: "Invalid spec",
+      allowed: ["eips", "ercs", "rips"],
+    });
+    return;
+  }
+  const monthYear =
+    req.query.month != null && String(req.query.month).trim() !== ""
+      ? String(req.query.month).trim()
+      : undefined;
+  try {
+    const result = await getBoardAggregation(model, monthYear);
+    res.json(result);
+  } catch (e) {
+    console.error("[board-api aggregation]", e);
+    res.status(500).json({ error: "Failed to fetch board aggregation" });
+  }
+});
+
 app.get("/api/boards/:spec", async (req: Request, res: Response) => {
   const spec = (req.params.spec ?? "").toLowerCase();
   const model = SPEC_TO_MODEL[spec];
@@ -63,11 +86,14 @@ app.get("/api/boards/:spec", async (req: Request, res: Response) => {
 
 app.get("/api/boards", (_req: Request, res: Response) => {
   res.json({
-    message: "Use GET /api/boards/:spec with spec = eips | ercs | rips",
-    queryParams: {
+    message: "Boards API. For boardsnew page use aggregation only.",
+    aggregation: "GET /api/boards/:spec/aggregation — current month open PRs by category and participants (author).",
+    queryParamsAggregation: { month: "Optional. YYYY-MM (default: current month)." },
+    flat: "GET /api/boards/:spec — flat list with optional subcategory, category, sort.",
+    queryParamsFlat: {
       subcategory: "Optional. e.g. 'Waiting on Editor', 'Waiting on Author'",
-      category: "Optional. e.g. 'Typo', 'PR DRAFT', 'New EIP'",
-      sort: "Optional. 'waitTime' (default) | 'created'",
+      category: "Optional. e.g. 'Typo', 'PR DRAFT'",
+      sort: "Optional. 'waitTime' | 'created'",
     },
   });
 });
