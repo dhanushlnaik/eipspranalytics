@@ -59,13 +59,13 @@ npm run build
 Run the analyzer (default: all three repos, CSV at `output/pr-analysis.csv`):
 
 ```bash
-npm run analyze
+npm run start
 ```
 
-Or directly:
+Or with ts-node:
 
 ```bash
-node dist/index.js
+npm run dev
 ```
 
 #### Options
@@ -121,6 +121,16 @@ The `category` column is derived and non-overlapping:
 - `Other` — Everything else
 
 The `subcategory` column indicates who the PR is waiting on: `Waiting on Editor`, `Waiting on Author`, `Stagnant`, or empty (drafts). See [CATEGORY_LOGIC.md](./CATEGORY_LOGIC.md) for full logic.
+
+### MongoDB sync (charts & boards)
+
+Set `OPENPRS_MONGODB_URI` and `OPENPRS_DATABASE` in `.env`. Then run **in order**:
+
+1. `npm run mongo:import` — fetch PRs and write to `eipprs` / `ercprs` / `ripprs`
+2. `npm run mongo:snapshots` — build monthly open-PR snapshots
+3. `npm run mongo:charts` — populate chart collections (Graph 1 from PRs, Graph 2/3 from snapshots)
+
+Or once: `npm run mongo:sync` (does 1 → 2 → 3). For recurring sync: `npm run mongo:scheduler`. Board API: `npm run api:boards`. See [docs/BEFORE_AND_AFTER.md](docs/BEFORE_AND_AFTER.md) for how this compares to the previous setup.
 
 ### Notes & limitations
 

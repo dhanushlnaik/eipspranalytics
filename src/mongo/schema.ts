@@ -34,6 +34,16 @@ const chartDataSchema = new mongoose.Schema(
   { strict: false }
 );
 
+/** Snapshot: open PRs as of a month. Same source for Graph 2/3 counts and details API (metadata). */
+const snapshotSchema = new mongoose.Schema(
+  {
+    month: String, // "YYYY-MM"
+    snapshotDate: String, // "YYYY-MM-DD" (e.g. last day of month); "latest per month" = sort by snapshotDate desc
+    prs: [mongoose.Schema.Types.Mixed], // full PR docs: number, title, author, prUrl, category, subcategory, etc.
+  },
+  { strict: false }
+);
+
 export const EIP_PR =
   mongoose.models.EIP_PR || mongoose.model("EIP_PR", prSchema, "eipprs");
 export const ERC_PR =
@@ -116,3 +126,13 @@ export const RIPS_CAT_SUB_CHARTS =
 export const ALL_CAT_SUB_CHARTS =
   mongoose.models.ALL_CAT_SUB_CHARTS ||
   mongoose.model("ALL_CAT_SUB_CHARTS", chartDataSchema, "allCategorySubcategoryCharts");
+
+export const EIP_SNAPSHOTS =
+  mongoose.models.EIP_SNAPSHOTS ||
+  mongoose.model("EIP_SNAPSHOTS", snapshotSchema, "open_pr_snapshots");
+export const ERC_SNAPSHOTS =
+  mongoose.models.ERC_SNAPSHOTS ||
+  mongoose.model("ERC_SNAPSHOTS", snapshotSchema, "open_erc_pr_snapshots");
+export const RIP_SNAPSHOTS =
+  mongoose.models.RIP_SNAPSHOTS ||
+  mongoose.model("RIP_SNAPSHOTS", snapshotSchema, "open_rip_pr_snapshots");

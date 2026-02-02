@@ -20,6 +20,8 @@ async function sync(): Promise<void> {
   try {
     const { run: runImport } = await import("./import-job");
     await runImport();
+    const { run: runSnapshots } = await import("./snapshots-job");
+    await runSnapshots();
     const { run: runCharts } = await import("./charts-job");
     await runCharts();
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);

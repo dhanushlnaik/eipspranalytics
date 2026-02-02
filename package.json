@@ -6,11 +6,11 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
-    "analyze": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "mongo:import": "node dist/mongo/import-job.js",
+    "mongo:snapshots": "node dist/mongo/snapshots-job.js",
     "mongo:charts": "node dist/mongo/charts-job.js",
-    "mongo:sync": "node dist/mongo/import-job.js && node dist/mongo/charts-job.js",
+    "mongo:sync": "node dist/mongo/import-job.js && node dist/mongo/snapshots-job.js && node dist/mongo/charts-job.js",
     "mongo:scheduler": "node dist/mongo/scheduler.js",
     "api:boards": "node dist/api/board-server.js"
   },

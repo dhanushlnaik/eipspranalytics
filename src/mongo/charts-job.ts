@@ -10,6 +10,9 @@ import {
   EIP_PR,
   ERC_PR,
   RIP_PR,
+  EIP_SNAPSHOTS,
+  ERC_SNAPSHOTS,
+  RIP_SNAPSHOTS,
   EIPS_PR_CHARTS,
   ERCS_PR_CHARTS,
   RIPS_PR_CHARTS,
@@ -104,6 +107,122 @@ function getPRStateCountsByMonthYear(
 function resolveSubcategory(pr: { subcategory?: string | null }): string {
   const s = pr.subcategory;
   return s != null && s !== "" ? s : "Uncategorized";
+}
+
+/** Snapshot doc: month + prs[] (same source as details API). */
+interface SnapshotDoc {
+  month: string;
+  snapshotDate?: string;
+  prs?: { category?: string | null; subcategory?: string | null }[];
+}
+
+/** For each month, keep only the latest snapshot (sort by snapshotDate desc, first per month). */
+function latestSnapshotPerMonth(snapshots: SnapshotDoc[]): SnapshotDoc[] {
+  const byMonth = new Map<string, SnapshotDoc>();
+  const sorted = [...snapshots].sort((a, b) => {
+    const da = a.snapshotDate ?? "";
+    const db = b.snapshotDate ?? "";
+    return db.localeCompare(da); // desc: latest first
+  });
+  for (const s of sorted) {
+    if (!byMonth.has(s.month)) byMonth.set(s.month, s);
+  }
+  return Array.from(byMonth.values()).sort((a, b) => a.month.localeCompare(b.month));
+}
+
+const CAT_SUB_SEP = "|";
+
+/** Graph 2/3 from snapshots: aggregate each snapshot's prs[] by category, subcategory, category|subcategory. */
+function getCategoryCountsFromSnapshots(
+  snapshots: SnapshotDoc[],
+  specType: string
+): { _id: string; category: string; monthYear: string; type: string; count: number }[] {
+  const category = specType.toLowerCase() + "s";
+  const out: { _id: string; category: string; monthYear: string; type: string; count: number }[] = [];
+  for (const snap of snapshots) {
+    const prs = snap.prs ?? [];
+    const counts: Record<string, number> = {};
+    for (const pr of prs) {
+      const cat = pr.category ?? "Other";
+      counts[cat] = (counts[cat] ?? 0) + 1;
+    }
+    Object.entries(counts).forEach(([type, count]) => {
+      if (count > 0)
+        out.push({
+          _id: `${snap.month}-${type}-${Date.now()}-${Math.random()}`,
+          category,
+          monthYear: snap.month,
+          type,
+          count,
+        });
+    });
+  }
+  return out.sort((a, b) => {
+    if (a.monthYear !== b.monthYear) return b.monthYear.localeCompare(a.monthYear);
+    return b.count - a.count;
+  });
+}
+
+function getSubcategoryCountsFromSnapshots(
+  snapshots: SnapshotDoc[],
+  specType: string
+): { _id: string; category: string; monthYear: string; type: string; count: number }[] {
+  const category = specType.toLowerCase() + "s";
+  const out: { _id: string; category: string; monthYear: string; type: string; count: number }[] = [];
+  for (const snap of snapshots) {
+    const prs = snap.prs ?? [];
+    const counts: Record<string, number> = {};
+    for (const pr of prs) {
+      const sub = resolveSubcategory(pr);
+      counts[sub] = (counts[sub] ?? 0) + 1;
+    }
+    Object.entries(counts).forEach(([type, count]) => {
+      if (count > 0)
+        out.push({
+          _id: `${snap.month}-${type}-${Date.now()}-${Math.random()}`,
+          category,
+          monthYear: snap.month,
+          type,
+          count,
+        });
+    });
+  }
+  return out.sort((a, b) => {
+    if (a.monthYear !== b.monthYear) return b.monthYear.localeCompare(a.monthYear);
+    return b.count - a.count;
+  });
+}
+
+function getCategorySubcategoryCountsFromSnapshots(
+  snapshots: SnapshotDoc[],
+  specType: string
+): { _id: string; category: string; monthYear: string; type: string; count: number }[] {
+  const category = specType.toLowerCase() + "s";
+  const out: { _id: string; category: string; monthYear: string; type: string; count: number }[] = [];
+  for (const snap of snapshots) {
+    const prs = snap.prs ?? [];
+    const counts: Record<string, number> = {};
+    for (const pr of prs) {
+      const cat = pr.category ?? "Other";
+      const sub = resolveSubcategory(pr);
+      const key = `${cat}${CAT_SUB_SEP}${sub}`;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    Object.entries(counts).forEach(([type, count]) => {
+      if (count > 0)
+        out.push({
+          _id: `${snap.month}-${type.replace(/\|/g, "-")}-${Date.now()}-${Math.random()}`,
+          category,
+          monthYear: snap.month,
+          type,
+          count,
+        });
+    });
+  }
+  return out.sort((a, b) => {
+    if (a.monthYear !== b.monthYear) return b.monthYear.localeCompare(a.monthYear);
+    return b.count - a.count;
+  });
 }
 
 /** Graph 2 (category): Open PRs per month by category — open PRs only, no labels. */
@@ -211,8 +330,6 @@ function getSubcategoryCountsByMonthYear(
   });
 }
 
-const CAT_SUB_SEP = "|";
-
 /** Graph 3: Open PRs per month by category × subcategory — open PRs only. */
 function getCategorySubcategoryCountsByMonthYear(
   prs: {
@@ -272,7 +389,8 @@ async function populateCharts(
   ChartsCat: typeof EIPS_CATEGORY_CHARTS,
   ChartsSub: typeof EIPS_SUBCATEGORY_CHARTS,
   ChartsCatSub: typeof EIPS_CAT_SUB_CHARTS,
-  specType: string
+  specType: string,
+  SnapModel?: typeof EIP_SNAPSHOTS
 ) {
   const prsRaw = await PRModel.find({}).lean();
   const prs = prsRaw as unknown as PRDoc[];
@@ -286,20 +404,42 @@ async function populateCharts(
   if (stateData.length > 0) await ChartsPR.insertMany(stateData);
   console.log(`[${specType}] Graph 1 (PR states): ${stateData.length} points`);
 
-  const catData = getCategoryCountsByMonthYear(prs, specType);
+  let catData: { _id: string; category: string; monthYear: string; type: string; count: number }[];
+  let subData: { _id: string; category: string; monthYear: string; type: string; count: number }[];
+  let catSubData: { _id: string; category: string; monthYear: string; type: string; count: number }[];
+
+  if (SnapModel) {
+    const snapshotsRaw = await SnapModel.find({}).lean();
+    const allSnapshots = snapshotsRaw as unknown as SnapshotDoc[];
+    const snapshots = latestSnapshotPerMonth(allSnapshots);
+    if (snapshots.length > 0) {
+      catData = getCategoryCountsFromSnapshots(snapshots, specType);
+      subData = getSubcategoryCountsFromSnapshots(snapshots, specType);
+      catSubData = getCategorySubcategoryCountsFromSnapshots(snapshots, specType);
+      console.log(`[${specType}] Graph 2/3 from latest snapshot per month (${snapshots.length} months) — matches details API`);
+    } else {
+      catData = getCategoryCountsByMonthYear(prs, specType);
+      subData = getSubcategoryCountsByMonthYear(prs, specType);
+      catSubData = getCategorySubcategoryCountsByMonthYear(prs, specType);
+      console.log(`[${specType}] Graph 2/3 from PRs (no snapshots yet; run mongo:snapshots first)`);
+    }
+  } else {
+    catData = getCategoryCountsByMonthYear(prs, specType);
+    subData = getSubcategoryCountsByMonthYear(prs, specType);
+    catSubData = getCategorySubcategoryCountsByMonthYear(prs, specType);
+  }
+
   await ChartsCat.deleteMany({});
   if (catData.length > 0) await ChartsCat.insertMany(catData);
-  console.log(`[${specType}] Graph 2 (category, open only): ${catData.length} points`);
+  console.log(`[${specType}] Graph 2 (category): ${catData.length} points`);
 
-  const subData = getSubcategoryCountsByMonthYear(prs, specType);
   await ChartsSub.deleteMany({});
   if (subData.length > 0) await ChartsSub.insertMany(subData);
-  console.log(`[${specType}] Graph 2 (subcategory, open only): ${subData.length} points`);
+  console.log(`[${specType}] Graph 2 (subcategory): ${subData.length} points`);
 
-  const catSubData = getCategorySubcategoryCountsByMonthYear(prs, specType);
   await ChartsCatSub.deleteMany({});
   if (catSubData.length > 0) await ChartsCatSub.insertMany(catSubData);
-  console.log(`[${specType}] Graph 3 (category×subcategory, open only): ${catSubData.length} points`);
+  console.log(`[${specType}] Graph 3 (category×subcategory): ${catSubData.length} points`);
 }
 
 async function populateAllCollections() {
@@ -384,6 +524,7 @@ export async function run(): Promise<void> {
   await mongoose.connect(MONGODB_URI!, { dbName: MONGODB_DATABASE });
 
   console.log("\n=== Graph 1: PR state counts (all PRs) ===");
+  console.log("=== Graph 2/3: from snapshots when present (same source as details API) ===");
   await Promise.all([
     populateCharts(
       EIP_PR,
@@ -391,7 +532,8 @@ export async function run(): Promise<void> {
       EIPS_CATEGORY_CHARTS,
       EIPS_SUBCATEGORY_CHARTS,
       EIPS_CAT_SUB_CHARTS,
-      "EIP"
+      "EIP",
+      EIP_SNAPSHOTS
     ),
     populateCharts(
       ERC_PR,
@@ -399,7 +541,8 @@ export async function run(): Promise<void> {
       ERCS_CATEGORY_CHARTS,
       ERCS_SUBCATEGORY_CHARTS,
       ERCS_CAT_SUB_CHARTS,
-      "ERC"
+      "ERC",
+      ERC_SNAPSHOTS
     ),
     populateCharts(
       RIP_PR,
@@ -407,7 +550,8 @@ export async function run(): Promise<void> {
       RIPS_CATEGORY_CHARTS,
       RIPS_SUBCATEGORY_CHARTS,
       RIPS_CAT_SUB_CHARTS,
-      "RIP"
+      "RIP",
+      RIP_SNAPSHOTS
     ),
   ]);
 
