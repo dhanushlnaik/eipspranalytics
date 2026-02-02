@@ -35,6 +35,15 @@ export interface CategorizedResult extends AnalysisResult {
   subcategory: string;
 }
 
+/**
+ * Determines who the PR is waiting on (editor vs author) from timeline order.
+ * - No editor event yet → Waiting on Editor.
+ * - Last activity is editor; no author event after it → Waiting on Author.
+ * - Author event after last editor event → Waiting on Editor (author responded; editor should act).
+ * Events must be chronologically sorted. PR opener is treated as author (see events.ts) so their
+ * commits/comments count even when not in EIP preamble; reviews use submitted_at ?? created_at so
+ * we don't drop late editor reviews and wrongly flip to "Waiting on Editor".
+ */
 export function analyzeTimeline(events: TimelineEvent[]): AnalysisResult {
   const editorEvents = events.filter((e) => e.role === "EDITOR");
   const authorEvents = events.filter((e) => e.role === "AUTHOR");

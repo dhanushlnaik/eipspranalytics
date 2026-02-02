@@ -42,17 +42,20 @@ export async function buildTimeline(params: {
   const normalizedEditors = new Set(
     Array.from(editors).map((e) => e.toLowerCase())
   );
-  const normalizedAuthors = new Set(
+  // PR opener always counts as AUTHOR for their commits/comments so we don't
+  // misclassify when preamble has no author line or opener isn't in it.
+  const effectiveAuthors = new Set(
     Array.from(authors).map((a) => a.toLowerCase())
   );
+  if (prAuthorLogin && !isBot(prAuthorLogin)) {
+    effectiveAuthors.add(prAuthorLogin.toLowerCase());
+  }
 
   const classifyRole = (login: string | null | undefined): ActorRole | null => {
     if (!login) return null;
     const lower = login.toLowerCase();
     if (normalizedEditors.has(lower)) return "EDITOR";
-    if (normalizedAuthors.has(lower)) return "AUTHOR";
-    // Only preamble authors count as AUTHOR. PR opener who is not an EIP author
-    // does not flip "waiting on author" — we need actual EIP author attention.
+    if (effectiveAuthors.has(lower)) return "AUTHOR";
     return null;
   };
 
@@ -102,8 +105,9 @@ export async function buildTimeline(params: {
     else if (r.state === "CHANGES_REQUESTED") source = "REVIEW_CHANGES_REQUESTED";
     else source = "REVIEW_COMMENTED";
 
-    // GitHub exposes `submitted_at` as the canonical timestamp for reviews.
-    const ts = r.submitted_at;
+    // Prefer submitted_at; fallback to created_at so we don't drop reviews
+    // that lack submitted_at (avoids wrongly treating last editor as earlier).
+    const ts = r.submitted_at ?? (r as { created_at?: string }).created_at;
     if (!ts) continue;
 
     events.push({

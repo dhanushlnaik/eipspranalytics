@@ -16,18 +16,22 @@ export async function loadEditors(octokit: Octokit): Promise<Set<string>> {
   }
 
   const decoded = Buffer.from(data.content, "base64").toString("utf8");
-  // Very lightweight YAML parsing: look for GitHub logins that start with a dash or list item.
-  // Example snippet patterns:
-  // - github: someuser
-  // or
-  // github: someuser
+  // Very lightweight YAML parsing: support both formats used in ethereum/EIPs config/eip-editors.yml
+  // 1) List items: "  - lightclient", "  - g11tech", "  - SamWilsn"
+  // 2) Legacy: "github: someuser" or "- github: someuser"
   const editors = new Set<string>();
+  const listItemRegex = /^\s*-\s+([A-Za-z0-9-]+)\s*$/; // "  - username"
   const githubLineRegex = /github:\s*([A-Za-z0-9-]+)/;
 
   for (const line of decoded.split(/\r?\n/)) {
-    const match = githubLineRegex.exec(line);
-    if (match) {
-      editors.add(match[1]);
+    const listMatch = listItemRegex.exec(line);
+    if (listMatch) {
+      editors.add(listMatch[1]);
+      continue;
+    }
+    const githubMatch = githubLineRegex.exec(line);
+    if (githubMatch) {
+      editors.add(githubMatch[1]);
     }
   }
 
