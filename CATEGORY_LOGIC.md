@@ -8,7 +8,7 @@ This document explains how each open PR gets its **category** and **subcategory*
 
 | Output | Meaning |
 |--------|--------|
-| **category** | What kind of PR it is: `PR DRAFT`, `Typo`, `New EIP`, `Status Change`, `Website`, `Tooling`, `EIP-1`, or `Other`. |
+| **category** | What kind of PR it is: `PR DRAFT`, `Typo`, `New EIP`, `Status Change`, `Website`, `Tooling`, `EIP-1`, or `Content Edit`. |
 | **subcategory** | Who the PR is waiting on (or if it’s stale): `Waiting on Editor`, `Waiting on Author`, `Stagnant`, or `AWAITED` (drafts not stagnant). |
 
 **Where it lives**
@@ -40,19 +40,25 @@ if (isDraft) {
 
 ### 1.2 Typo
 
-- **Condition**: Title matches typo/grammar **and** small diff:
+- **Condition**: Title matches typo/grammar **and** small diff, excluding branch-conflicted PRs:
   - Title: `/typo|grammar|spelling/i`
   - `changed_files ≤ 5`
   - `additions + deletions < 50`
+  - PR is mergeable / has no branch conflicts (exclude `mergeable_state === "dirty"` or `mergeable === false`)
 - **Type**: `TYPO` → **category** = `Typo`.
 - **Code**: `src/index.ts` builds `isTypoLike`; `src/analysis.ts` uses it in `classifyPRType()`:
 
 ```ts
-// index.ts
+// index.ts (updated)
+// Exclude PRs with branch conflicts (mergeable_state === "dirty" or mergeable === false)
+const hasBranchConflict =
+  (prDetails.mergeable_state ?? "").toLowerCase() === "dirty" ||
+  prDetails.mergeable === false;
 const isTypoLike =
   /typo|grammar|spelling/i.test(prTitle) &&
   (prDetails.changed_files ?? 0) <= 5 &&
-  ((prDetails.additions ?? 0) + (prDetails.deletions ?? 0)) < 50;
+  ((prDetails.additions ?? 0) + (prDetails.deletions ?? 0)) < 50 &&
+  !hasBranchConflict;
 
 // analysis.ts
 if (isTypoLike) {
@@ -90,16 +96,19 @@ if (newEipFiles.length > 0) {
 
 ### 1.4 Status change (by files)
 
-- **Condition**: At least one **modified** EIP/ERC/RIP `.md` file (same path patterns as above) with **small diff**: `(additions ?? 0) + (deletions ?? 0) < 20`.
+- **Condition**: At least one **modified** EIP/ERC/RIP `.md` file whose change is limited to the preamble `status:` line (preamble-only change). We conservatively detect this by comparing base vs head file contents: the body must be identical and only the `status:` value in the preamble differs.
 - **Type**: `STATUS_CHANGE` → **category** = `Status Change`.
-- **Code**: `src/analysis.ts`, `classifyPRType()`:
+- **Code**: `src/analysis.ts`, `classifyPRType()` — the importer/enricher computes a `preambleStatusChangedOnly` flag for modified EIP/ERC/RIP files and `classifyPRType()` treats files with that flag as status changes:
 
 ```ts
+// analysis.ts
 const modifiedEipFiles = fileChanges.filter(
   (f) =>
     f.status === "modified" &&
-    (f.filename.match(/EIPS\/eip-\d+\.md/i) || ...) &&
-    (f.additions ?? 0) + (f.deletions ?? 0) < 20
+    (f.filename.match(/EIPS\/eip-\d+\.md/i) ||
+      f.filename.match(/ERCS\/erc-\d+\.md/i) ||
+      f.filename.match(/RIPS\/rip-\d+\.md/i)) &&
+    f.preambleStatusChangedOnly === true
 );
 if (modifiedEipFiles.length > 0) {
   return { type: "STATUS_CHANGE", isCreatedByBot: false };
@@ -188,9 +197,7 @@ if (titleIsToolingPrefix || titleContainsToolingKeyword || bodyContainsToolingKe
 
 ### 1.8 EIP-1
 
-- **Condition**: **Either**:
-  1. Any changed file is `EIPS/eip-1.md`, `ERCS/erc-1.md`, or `RIPS/rip-1.md`, **or**
-  2. Title or body contains `EIP-1` or `eip-1`.
+- **Condition**: The PR actually touches the `EIPS/eip-1.md`, `ERCS/erc-1.md`, or `RIPS/rip-1.md` file. We do **not** classify a PR as EIP-1 based on title or body mentions.
 - **Type**: `EIP_1` → **category** = `EIP-1`.
 - **Code**: `src/analysis.ts`, `classifyPRType()`:
 
@@ -201,18 +208,17 @@ const hasEip1File = fileChanges.some(
     /ERCS\/erc-1\.md$/i.test(f.filename) ||
     /RIPS\/rip-1\.md$/i.test(f.filename)
 );
-const textForEip1 = `${prTitle} ${prBody ?? ""}`;
-if (hasEip1File || /eip-1|eip\-1/i.test(textForEip1)) {
+if (hasEip1File) {
   return { type: "EIP_1", isCreatedByBot: false };
 }
 ```
 
 ---
 
-### 1.9 Other
+### 1.9 Content Edit
 
 - **Condition**: None of the above.
-- **Type**: `OTHER` → **category** = `Other`.
+- **Type**: `OTHER` → **category** = `Content Edit`.
 
 ---
 
@@ -332,7 +338,7 @@ Category label is then set from `classification.type` (e.g. `DRAFT` → `PR DRAF
 ## 6. Quick reference
 
 **Category (PR type)**  
-`PR DRAFT` | `Typo` | `New EIP` | `Status Change` | `Website` | `Tooling` | `EIP-1` | `Other`  
+`PR DRAFT` | `Typo` | `New EIP` | `Status Change` | `Website` | `Tooling` | `EIP-1` | `Content Edit`  
 → From `classifyPRType()` + title override in `index.ts`. Tooling combines CI, Bump, Config (title prefix or first word in description).
 
 **Subcategory (waiting state)**  

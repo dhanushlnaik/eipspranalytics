@@ -77,7 +77,7 @@ db.eipsPRCharts.find(
   - **`"Website"`** — website changes
   - **`"Tooling"`** — CI/config/tooling
   - **`"EIP-1"`** — EIP-1 changes
-  - **`"Other"`** — everything else
+  - **`"Content Edit"`** — everything else
 
 **Example query (last 12 months, EIPs):**
 
@@ -145,7 +145,7 @@ db.eipsSubcategoryCharts.find(
 **Document fields:**
 
 - `type`: **`"<category>|<subcategory>"`**  
-  Examples: `"PR DRAFT|AWAITED"`, `"Typo|Waiting on Editor"`, `"Other|Uncategorized"`.
+  Examples: `"PR DRAFT|AWAITED"`, `"Typo|Waiting on Editor"`, `"Content Edit|Uncategorized"`.
 
 **Example query:**
 
@@ -251,7 +251,7 @@ Render boardsnew from this only: by category (tabs/sections) and optionally by p
 | Param | Type | Description |
 |-------|------|-------------|
 | `subcategory` | string | Filter by subcategory, e.g. `Waiting on Editor`, `Waiting on Author`, `Stagnant`, `AWAITED`, `Uncategorized` |
-| `category` | string | Filter by category, e.g. `Typo`, `PR DRAFT`, `New EIP`, `Status Change`, `Website`, `Tooling`, `EIP-1`, `Other` |
+| `category` | string | Filter by category, e.g. `Typo`, `PR DRAFT`, `New EIP`, `Status Change`, `Website`, `Tooling`, `EIP-1`, `Content Edit` |
 | `sort` | string | `waitTime` (default: longest waiting first) \| `created` (oldest first) |
 
 **Example requests:**

@@ -107,7 +107,7 @@ Used by **PrLabels** (Graph 2: Process or Participants). **Open PRs only**, per 
 
 ```ts
 { category: string; monthYear: string; type: string; count: number; }
-// type = Process: "PR DRAFT" | "Typo" | "New EIP" | "Website" | "EIP-1" | "Tooling" | "Status Change" | "Other"
+// type = Process: "PR DRAFT" | "Typo" | "New EIP" | "Website" | "EIP-1" | "Tooling" | "Status Change" | "Content Edit"
 ```
 
 **Subcategory (Participants) – collections:** `eipsSubcategoryCharts`, `ercsSubcategoryCharts`, `ripsSubcategoryCharts`, `allSubcategoryCharts`
@@ -157,7 +157,7 @@ Used by **CategorySubcategoryChart**. One document per (monthYear, Process, Part
 Use a single set of strings everywhere you can:
 
 **Process (category):**  
-`PR DRAFT` | `Typo` | `New EIP` | `Website` | `EIP-1` | `Tooling` | `Status Change` | `Other`
+`PR DRAFT` | `Typo` | `New EIP` | `Website` | `EIP-1` | `Tooling` | `Status Change` | `Content Edit`
 
 **Participants (subcategory):**  
 `Waiting on Editor` | `Waiting on Author` | `Stagnant` | `AWAITED` | `Uncategorized` (or `Awaited` | `Misc` if you prefer)

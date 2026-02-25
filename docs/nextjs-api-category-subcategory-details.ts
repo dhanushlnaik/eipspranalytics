@@ -154,7 +154,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const githubRepo = GITHUB_REPOS[repoKey];
 
       for (const pr of inScope) {
-        const processVal = pr.category ?? "Other";
+        const processVal = pr.category ?? "Content Edit";
         const participantsVal = pr.subcategory ?? "Uncategorized";
         const labels = Array.isArray(pr.githubLabels) ? pr.githubLabels : [];
 

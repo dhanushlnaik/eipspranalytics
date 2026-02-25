@@ -100,6 +100,90 @@ async function enrichOpenPR(
     /status|move|withdraw|finalize|supersede/i.test(prTitle);
   const prBody = prDetails.body ?? null;
 
+  // Enrich fileChanges with a flag indicating whether a modified EIP/ERC/RIP file
+  // changed only its preamble `status:` line (preamble-only change).
+  const baseSha = prDetails.base?.sha ?? null;
+
+  async function getFileContentAtRef(ref: string | null, filePath: string) {
+    if (!ref) return null;
+    try {
+      const { data } = await octokit.repos.getContent({
+        owner,
+        repo,
+        path: filePath,
+        ref,
+      });
+      if (!("content" in data)) return null;
+      const text = Buffer.from(data.content, "base64").toString("utf8");
+      return text;
+    } catch {
+      return null;
+    }
+  }
+
+  function splitPreambleAndBody(text: string) {
+    const lines = text.split(/\r?\n/);
+    let i = 0;
+    for (; i < lines.length; i++) {
+      if (lines[i].trim() === "") {
+        break;
+      }
+    }
+    const preamble = lines.slice(0, i).join("\n");
+    const body = lines.slice(i + 1).join("\n");
+    return { preamble, body };
+  }
+
+  function extractStatusFromPreamble(preamble: string): string | null {
+    const re = /^status\s*:\s*(.+)$/im;
+    const m = re.exec(preamble);
+    if (!m) return null;
+    return m[1].trim();
+  }
+
+  for (const f of fileChanges) {
+    (f as any).preambleStatusChangedOnly = false;
+  }
+
+  for (const f of fileChanges) {
+    if (
+      f.status === "modified" &&
+      (f.filename.match(/EIPS\/eip-\d+\.md/i) ||
+        f.filename.match(/ERCS\/erc-\d+\.md/i) ||
+        f.filename.match(/RIPS\/rip-\d+\.md/i))
+    ) {
+      const baseText = await getFileContentAtRef(baseSha, f.filename);
+      const headText = await getFileContentAtRef(headSha, f.filename);
+      if (baseText == null || headText == null) {
+        (f as any).preambleStatusChangedOnly = false;
+        continue;
+      }
+      const baseParts = splitPreambleAndBody(baseText);
+      const headParts = splitPreambleAndBody(headText);
+      if (baseParts.body !== headParts.body) {
+        (f as any).preambleStatusChangedOnly = false;
+        continue;
+      }
+      const baseStatus = extractStatusFromPreamble(baseParts.preamble);
+      const headStatus = extractStatusFromPreamble(headParts.preamble);
+      if (baseStatus == null && headStatus == null) {
+        (f as any).preambleStatusChangedOnly = false;
+        continue;
+      }
+      const stripStatus = (p: string) =>
+        p
+          .split(/\r?\n/)
+          .filter((ln) => !/^status\s*:/i.test(ln))
+          .join("\n")
+          .trim();
+      if (stripStatus(baseParts.preamble) === stripStatus(headParts.preamble) && baseStatus !== headStatus) {
+        (f as any).preambleStatusChangedOnly = true;
+      } else {
+        (f as any).preambleStatusChangedOnly = false;
+      }
+    }
+  }
+
   let classification = classifyPRType({
     isDraft,
     isTypoLike,
@@ -118,7 +202,8 @@ async function enrichOpenPR(
         f.status === "modified" &&
         (f.filename.match(/EIPS\/eip-\d+\.md/i) ||
           f.filename.match(/ERCS\/erc-\d+\.md/i) ||
-          f.filename.match(/RIPS\/rip-\d+\.md/i))
+          f.filename.match(/RIPS\/rip-\d+\.md/i)) &&
+        (f as any).preambleStatusChangedOnly === true
     );
     if (hasModifiedEipFiles) {
       classification.type = "STATUS_CHANGE";

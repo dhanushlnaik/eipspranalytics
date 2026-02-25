@@ -267,7 +267,8 @@ async function main() {
               f.status === "modified" &&
               (f.filename.match(/EIPS\/eip-\d+\.md/i) ||
                 f.filename.match(/ERCS\/erc-\d+\.md/i) ||
-                f.filename.match(/RIPS\/rip-\d+\.md/i))
+                f.filename.match(/RIPS\/rip-\d+\.md/i)) &&
+              f.preambleStatusChangedOnly === true
           );
           if (hasModifiedEipFiles) {
             classification.type = "STATUS_CHANGE";
