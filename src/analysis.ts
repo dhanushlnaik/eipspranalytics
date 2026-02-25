@@ -135,7 +135,15 @@ function getFirstWordFromBody(body: string | null | undefined): string | null {
 export function classifyPRType(params: {
   isDraft: boolean;
   isTypoLike: boolean;
-  fileChanges: Array<{ filename: string; status: string; additions?: number; deletions?: number }>;
+  // fileChanges may include a computed flag `preambleStatusChangedOnly` which
+  // indicates the only change in an EIP/ERC/RIP file was the preamble `status:` line.
+  fileChanges: Array<{
+    filename: string;
+    status: string;
+    additions?: number;
+    deletions?: number;
+    preambleStatusChangedOnly?: boolean;
+  }>;
   prTitle?: string;
   prBody?: string | null;
 }): PRClassification {
@@ -162,14 +170,17 @@ export function classifyPRType(params: {
     return { type: "NEW_EIP", isCreatedByBot: false };
   }
 
-  // Check for status changes in existing EIP files
+  // Check for status changes in existing EIP files.
+  // Only treat as a STATUS_CHANGE when the file is an EIP/ERC/RIP and the change
+  // was determined (by upstream logic) to be preamble-only and limited to the
+  // `status:` line. The `preambleStatusChangedOnly` flag is set by the caller.
   const modifiedEipFiles = fileChanges.filter(
     (f) =>
       f.status === "modified" &&
       (f.filename.match(/EIPS\/eip-\d+\.md/i) ||
         f.filename.match(/ERCS\/erc-\d+\.md/i) ||
         f.filename.match(/RIPS\/rip-\d+\.md/i)) &&
-      (f.additions ?? 0) + (f.deletions ?? 0) < 20
+      f.preambleStatusChangedOnly === true
   );
 
   if (modifiedEipFiles.length > 0) {
@@ -202,15 +213,15 @@ export function classifyPRType(params: {
     return { type: "TOOLING", isCreatedByBot: false };
   }
 
-  // EIP-1: touches EIP-1 / ERC-1 / RIP-1 file or title/body mentions EIP-1
+  // EIP-1: only classify as EIP_1 when the PR actually touches the EIP-1/ERC-1/RIP-1
+  // file itself. Do NOT rely on title/body mentions.
   const hasEip1File = fileChanges.some(
     (f) =>
       /EIPS\/eip-1\.md$/i.test(f.filename) ||
       /ERCS\/erc-1\.md$/i.test(f.filename) ||
       /RIPS\/rip-1\.md$/i.test(f.filename)
   );
-  const textForEip1 = `${prTitle} ${prBody ?? ""}`;
-  if (hasEip1File || /eip-1|eip\-1/i.test(textForEip1)) {
+  if (hasEip1File) {
     return { type: "EIP_1", isCreatedByBot: false };
   }
 
@@ -300,7 +311,7 @@ export function categorizeResult(params: {
       category = "EIP-1";
       break;
     default:
-      category = "Other";
+      category = "Content Edit";
   }
 
   return {
