@@ -135,10 +135,16 @@ async function main() {
         }
 
         // Heuristic: small PRs with "typo" or grammar-related hints in the title.
+        // Exclude PRs with branch conflicts (mergeable_state === "dirty")
+        // or explicit non-mergeable flag.
+        const hasBranchConflict =
+          (prDetails.mergeable_state ?? "").toLowerCase() === "dirty" ||
+          prDetails.mergeable === false;
         const isTypoLike =
           /typo|grammar|spelling/i.test(prTitle) &&
           (prDetails.changed_files ?? 0) <= 5 &&
-          ((prDetails.additions ?? 0) + (prDetails.deletions ?? 0)) < 50;
+          ((prDetails.additions ?? 0) + (prDetails.deletions ?? 0)) < 50 &&
+          !hasBranchConflict;
 
         // Check if title suggests status change
         const isStatusChangeLike =

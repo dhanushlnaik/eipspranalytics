@@ -263,6 +263,20 @@ export function categorizeResult(params: {
     };
   }
 
+  // Special case: for Typo PRs, do NOT mark as waiting on editors unless the
+  // authors have interacted (e.g. committed or commented). This avoids showing
+  // trivial typo fixes as needing editor attention until the author has
+  // acknowledged or acted.
+  if (classification.type === "TYPO" && !result.lastAuthorAction) {
+    result = {
+      ...result,
+      needsEditorAttention: false,
+      waitingSince: null,
+      reason:
+        "This typo PR has no author interactions yet; it is waiting on the author.",
+    };
+  }
+
   const isStagnant =
     !result.needsEditorAttention &&
     daysSinceLastActivity !== null &&
