@@ -10,6 +10,7 @@ import { loadEditors } from "../editors";
 import { extractAuthorsFromFiles } from "../authors";
 import { buildTimeline } from "../events";
 import { analyzeTimeline, categorizeResult, classifyPRType } from "../analysis";
+import { isPreambleStatusChangedOnly } from "../preamble";
 import {
   EIP_PR,
   ERC_PR,
@@ -121,26 +122,6 @@ async function enrichOpenPR(
     }
   }
 
-  function splitPreambleAndBody(text: string) {
-    const lines = text.split(/\r?\n/);
-    let i = 0;
-    for (; i < lines.length; i++) {
-      if (lines[i].trim() === "") {
-        break;
-      }
-    }
-    const preamble = lines.slice(0, i).join("\n");
-    const body = lines.slice(i + 1).join("\n");
-    return { preamble, body };
-  }
-
-  function extractStatusFromPreamble(preamble: string): string | null {
-    const re = /^status\s*:\s*(.+)$/im;
-    const m = re.exec(preamble);
-    if (!m) return null;
-    return m[1].trim();
-  }
-
   for (const f of fileChanges) {
     (f as any).preambleStatusChangedOnly = false;
   }
@@ -158,29 +139,10 @@ async function enrichOpenPR(
         (f as any).preambleStatusChangedOnly = false;
         continue;
       }
-      const baseParts = splitPreambleAndBody(baseText);
-      const headParts = splitPreambleAndBody(headText);
-      if (baseParts.body !== headParts.body) {
-        (f as any).preambleStatusChangedOnly = false;
-        continue;
-      }
-      const baseStatus = extractStatusFromPreamble(baseParts.preamble);
-      const headStatus = extractStatusFromPreamble(headParts.preamble);
-      if (baseStatus == null && headStatus == null) {
-        (f as any).preambleStatusChangedOnly = false;
-        continue;
-      }
-      const stripStatus = (p: string) =>
-        p
-          .split(/\r?\n/)
-          .filter((ln) => !/^status\s*:/i.test(ln))
-          .join("\n")
-          .trim();
-      if (stripStatus(baseParts.preamble) === stripStatus(headParts.preamble) && baseStatus !== headStatus) {
-        (f as any).preambleStatusChangedOnly = true;
-      } else {
-        (f as any).preambleStatusChangedOnly = false;
-      }
+      (f as any).preambleStatusChangedOnly = isPreambleStatusChangedOnly(
+        baseText,
+        headText
+      );
     }
   }
 

@@ -5,6 +5,7 @@ import { loadEditors } from "./editors";
 import { extractAuthorsFromFiles } from "./authors";
 import { buildTimeline } from "./events";
 import { analyzeTimeline, categorizeResult, classifyPRType } from "./analysis";
+import { isPreambleStatusChangedOnly } from "./preamble";
 import { writeCsv, mergeCsvFiles, CsvRow } from "./csv";
 
 interface CliOptions {
@@ -171,27 +172,6 @@ async function main() {
           }
         }
 
-        function splitPreambleAndBody(text: string) {
-          const lines = text.split(/\r?\n/);
-          let i = 0;
-          for (; i < lines.length; i++) {
-            if (lines[i].trim() === "") {
-              // preamble ends at the first blank line
-              break;
-            }
-          }
-          const preamble = lines.slice(0, i).join("\n");
-          const body = lines.slice(i + 1).join("\n");
-          return { preamble, body };
-        }
-
-        function extractStatusFromPreamble(preamble: string): string | null {
-          const re = /^status\s*:\s*(.+)$/im;
-          const m = re.exec(preamble);
-          if (!m) return null;
-          return m[1].trim();
-        }
-
         // Compute preambleStatusChangedOnly for candidate files.
         for (const f of fileChanges) {
           f.preambleStatusChangedOnly = false;
@@ -211,37 +191,10 @@ async function main() {
               f.preambleStatusChangedOnly = false;
               continue;
             }
-
-            const baseParts = splitPreambleAndBody(baseText);
-            const headParts = splitPreambleAndBody(headText);
-
-            // Bodies must be identical for a preamble-only change.
-            if (baseParts.body !== headParts.body) {
-              f.preambleStatusChangedOnly = false;
-              continue;
-            }
-
-            // Preambles must be identical except for the `status:` line.
-            const baseStatus = extractStatusFromPreamble(baseParts.preamble);
-            const headStatus = extractStatusFromPreamble(headParts.preamble);
-            if (baseStatus == null && headStatus == null) {
-              f.preambleStatusChangedOnly = false;
-              continue;
-            }
-
-            // Remove status lines and compare remaining preamble text.
-            const stripStatus = (p: string) =>
-              p
-                .split(/\r?\n/)
-                .filter((ln) => !/^status\s*:/i.test(ln))
-                .join("\n")
-                .trim();
-
-            if (stripStatus(baseParts.preamble) === stripStatus(headParts.preamble) && baseStatus !== headStatus) {
-              f.preambleStatusChangedOnly = true;
-            } else {
-              f.preambleStatusChangedOnly = false;
-            }
+            f.preambleStatusChangedOnly = isPreambleStatusChangedOnly(
+              baseText,
+              headText
+            );
           }
         }
 
@@ -409,4 +362,3 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-
