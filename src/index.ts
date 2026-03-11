@@ -3,6 +3,7 @@ import { createOctokit } from "./githubClient";
 import { TARGET_REPOS, REPO_ORDER, BOT_LOGIN_SUFFIX } from "./config";
 import { loadEditors } from "./editors";
 import { extractAuthorsFromFiles } from "./authors";
+import { getHeadCheckState } from "./checks";
 import { buildTimeline } from "./events";
 import { getEthBotReviewSignal } from "./ethBot";
 import { analyzeTimeline, categorizeResult, classifyPRType } from "./analysis";
@@ -145,6 +146,12 @@ async function main() {
         const hasBranchConflict =
           (prDetails.mergeable_state ?? "").toLowerCase() === "dirty" ||
           prDetails.mergeable === false;
+        const { hasBlockingChecks } = await getHeadCheckState({
+          octokit,
+          owner,
+          repo,
+          ref: headSha,
+        });
         const isTypoLike =
           /typo|grammar|spelling/i.test(prTitle) &&
           (prDetails.changed_files ?? 0) <= 5 &&
@@ -313,6 +320,7 @@ async function main() {
           prTitle,
           ethBotNeedsEditorReview,
           hasMergeConflicts: hasBranchConflict,
+          hasBlockingChecks,
           hasStagnantPreambleStatus,
         });
 

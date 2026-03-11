@@ -240,6 +240,7 @@ export function categorizeResult(params: {
   prTitle: string;
   ethBotNeedsEditorReview?: boolean | null;
   hasMergeConflicts?: boolean;
+  hasBlockingChecks?: boolean;
   hasStagnantPreambleStatus?: boolean;
 }): CategorizedResult {
   const {
@@ -249,6 +250,7 @@ export function categorizeResult(params: {
     prTitle,
     ethBotNeedsEditorReview = null,
     hasMergeConflicts = false,
+    hasBlockingChecks = false,
     hasStagnantPreambleStatus = false,
   } = params;
 
@@ -295,10 +297,17 @@ export function categorizeResult(params: {
   if (ethBotNeedsEditorReview !== null) {
     result = {
       ...result,
-      needsEditorAttention: ethBotNeedsEditorReview,
-      waitingSince: ethBotNeedsEditorReview ? result.waitingSince : null,
+      needsEditorAttention: ethBotNeedsEditorReview
+        ? result.needsEditorAttention
+        : false,
+      waitingSince:
+        ethBotNeedsEditorReview && result.needsEditorAttention
+          ? result.waitingSince
+          : null,
       reason: ethBotNeedsEditorReview
-        ? "eth-bot requested more editor reviewers on this PR."
+        ? result.needsEditorAttention
+          ? "eth-bot requested editor reviewers and the latest activity still leaves this PR waiting on editors."
+          : "eth-bot requested editor reviewers, but the latest editor activity means the PR is currently waiting on authors."
         : "eth-bot requested review from non-editor participants, so this PR is treated as waiting on authors.",
     };
   }
@@ -308,6 +317,7 @@ export function categorizeResult(params: {
     (
       (ethBotNeedsEditorReview === null && result.hasOtherParticipants) ||
       hasMergeConflicts ||
+      hasBlockingChecks ||
       hasStagnantPreambleStatus
     )
   ) {
@@ -316,6 +326,7 @@ export function categorizeResult(params: {
       reasons.push("there are non-editor participants on the PR");
     }
     if (hasMergeConflicts) reasons.push("the PR has merge conflicts");
+    if (hasBlockingChecks) reasons.push("some checks are still pending or failing");
     if (hasStagnantPreambleStatus) reasons.push("the preamble status is Stagnant");
     result = {
       ...result,
