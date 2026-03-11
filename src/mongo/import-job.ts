@@ -9,8 +9,12 @@ import { REPO_ORDER, BOT_LOGIN_SUFFIX, MONGODB_URI, MONGODB_DATABASE } from "../
 import { loadEditors } from "../editors";
 import { extractAuthorsFromFiles } from "../authors";
 import { buildTimeline } from "../events";
+import { getEthBotReviewSignal } from "../ethBot";
 import { analyzeTimeline, categorizeResult, classifyPRType } from "../analysis";
-import { isPreambleStatusChangedOnly } from "../preamble";
+import {
+  extractUniqueStatusFromText,
+  isPreambleStatusChangedOnly,
+} from "../preamble";
 import {
   EIP_PR,
   ERC_PR,
@@ -97,6 +101,9 @@ async function enrichOpenPR(
     /typo|grammar|spelling/i.test(prTitle) &&
     (prDetails.changed_files ?? 0) <= 5 &&
     ((prDetails.additions ?? 0) + (prDetails.deletions ?? 0)) < 50;
+  const hasBranchConflict =
+    (prDetails.mergeable_state ?? "").toLowerCase() === "dirty" ||
+    prDetails.mergeable === false;
   const isStatusChangeLike =
     /status|move|withdraw|finalize|supersede/i.test(prTitle);
   const prBody = prDetails.body ?? null;
@@ -104,6 +111,7 @@ async function enrichOpenPR(
   // Enrich fileChanges with a flag indicating whether a modified EIP/ERC/RIP file
   // changed only its preamble `status:` line (preamble-only change).
   const baseSha = prDetails.base?.sha ?? null;
+  let hasStagnantPreambleStatus = false;
 
   async function getFileContentAtRef(ref: string | null, filePath: string) {
     if (!ref) return null;
@@ -128,13 +136,20 @@ async function enrichOpenPR(
 
   for (const f of fileChanges) {
     if (
-      f.status === "modified" &&
       (f.filename.match(/EIPS\/eip-\d+\.md/i) ||
         f.filename.match(/ERCS\/erc-\d+\.md/i) ||
         f.filename.match(/RIPS\/rip-\d+\.md/i))
     ) {
-      const baseText = await getFileContentAtRef(baseSha, f.filename);
       const headText = await getFileContentAtRef(headSha, f.filename);
+      if (headText != null) {
+        const headStatus = extractUniqueStatusFromText(headText);
+        if (headStatus?.toLowerCase() === "stagnant") {
+          hasStagnantPreambleStatus = true;
+        }
+      }
+      if (f.status !== "modified") continue;
+
+      const baseText = await getFileContentAtRef(baseSha, f.filename);
       if (baseText == null || headText == null) {
         (f as any).preambleStatusChangedOnly = false;
         continue;
@@ -176,6 +191,7 @@ async function enrichOpenPR(
 
   let analysis: ReturnType<typeof analyzeTimeline>;
   let daysSinceLastActivity: number | null;
+  let ethBotNeedsEditorReview: boolean | null = null;
 
   if (!isDraft) {
     const authors = await extractAuthorsFromFiles({
@@ -199,6 +215,16 @@ async function enrichOpenPR(
       prAuthorLogin,
     });
     analysis = analyzeTimeline(timeline);
+    ethBotNeedsEditorReview =
+      (
+        await getEthBotReviewSignal({
+          octokit,
+          owner,
+          repo,
+          pullNumber: prNumber,
+          editors,
+        })
+      )?.needsEditorReview ?? null;
     const lastActivityTs =
       timeline.length > 0 ? timeline[timeline.length - 1].timestamp : createdAt;
     const now = new Date();
@@ -211,6 +237,7 @@ async function enrichOpenPR(
       waitingSince: null,
       lastEditorAction: null,
       lastAuthorAction: null,
+      hasOtherParticipants: false,
       reason: "This PR is in draft status.",
     } as ReturnType<typeof analyzeTimeline>;
     const now = new Date();
@@ -223,6 +250,9 @@ async function enrichOpenPR(
     classification,
     daysSinceLastActivity,
     prTitle,
+    ethBotNeedsEditorReview,
+    hasMergeConflicts: hasBranchConflict,
+    hasStagnantPreambleStatus,
   });
   const waitingSince =
     analysis.waitingSince != null ? new Date(analysis.waitingSince) : null;

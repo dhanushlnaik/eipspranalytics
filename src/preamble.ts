@@ -23,6 +23,11 @@ export function splitPreambleAndBody(text: string) {
   return { preamble, body };
 }
 
+export function extractUniqueStatusFromText(text: string): string | null {
+  const { preamble } = splitPreambleAndBody(text);
+  return extractUniqueStatusFromPreamble(preamble);
+}
+
 export function extractUniqueStatusFromPreamble(preamble: string): string | null {
   const matches = preamble.match(/^status\s*:\s*(.+)$/gim) ?? [];
   if (matches.length !== 1) return null;

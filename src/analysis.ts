@@ -11,6 +11,7 @@ export interface AnalysisResult {
   waitingSince: string | null;
   lastEditorAction: ActionSummary | null;
   lastAuthorAction: ActionSummary | null;
+  hasOtherParticipants: boolean;
   reason: string;
 }
 
@@ -47,6 +48,7 @@ export interface CategorizedResult extends AnalysisResult {
 export function analyzeTimeline(events: TimelineEvent[]): AnalysisResult {
   const editorEvents = events.filter((e) => e.role === "EDITOR");
   const authorEvents = events.filter((e) => e.role === "AUTHOR");
+  const otherEvents = events.filter((e) => e.role === "OTHER");
 
   const lastEditorEvent =
     editorEvents.length > 0
@@ -69,6 +71,7 @@ export function analyzeTimeline(events: TimelineEvent[]): AnalysisResult {
             date: lastAuthorEvent.timestamp,
           }
         : null,
+      hasOtherParticipants: otherEvents.length > 0,
       reason:
         "No editor has interacted with this PR yet; it is waiting for initial editor attention.",
     };
@@ -91,6 +94,7 @@ export function analyzeTimeline(events: TimelineEvent[]): AnalysisResult {
         type: lastAuthorAfterEditor.source,
         date: lastAuthorAfterEditor.timestamp,
       },
+      hasOtherParticipants: otherEvents.length > 0,
       reason:
         "An editor interacted with the PR and the author has since responded; it is now waiting on editor attention.",
     };
@@ -111,6 +115,7 @@ export function analyzeTimeline(events: TimelineEvent[]): AnalysisResult {
           date: lastAuthorEvent.timestamp,
         }
       : null,
+    hasOtherParticipants: otherEvents.length > 0,
     reason:
       "An editor has interacted with the PR and there has been no author response since; it is waiting on the author.",
   };
@@ -233,9 +238,19 @@ export function categorizeResult(params: {
   classification: PRClassification;
   daysSinceLastActivity: number | null;
   prTitle: string;
+  ethBotNeedsEditorReview?: boolean | null;
+  hasMergeConflicts?: boolean;
+  hasStagnantPreambleStatus?: boolean;
 }): CategorizedResult {
-  const { result: baseResult, classification, daysSinceLastActivity, prTitle } =
-    params;
+  const {
+    result: baseResult,
+    classification,
+    daysSinceLastActivity,
+    prTitle,
+    ethBotNeedsEditorReview = null,
+    hasMergeConflicts = false,
+    hasStagnantPreambleStatus = false,
+  } = params;
 
   // Start from the timeline-based result, but allow small domain-specific
   // overrides for certain PR types.
@@ -274,6 +289,39 @@ export function categorizeResult(params: {
       waitingSince: null,
       reason:
         "This typo PR has no author interactions yet; it is waiting on the author.",
+    };
+  }
+
+  if (ethBotNeedsEditorReview !== null) {
+    result = {
+      ...result,
+      needsEditorAttention: ethBotNeedsEditorReview,
+      waitingSince: ethBotNeedsEditorReview ? result.waitingSince : null,
+      reason: ethBotNeedsEditorReview
+        ? "eth-bot requested more editor reviewers on this PR."
+        : "eth-bot requested review from non-editor participants, so this PR is treated as waiting on authors.",
+    };
+  }
+
+  if (
+    result.needsEditorAttention &&
+    (
+      (ethBotNeedsEditorReview === null && result.hasOtherParticipants) ||
+      hasMergeConflicts ||
+      hasStagnantPreambleStatus
+    )
+  ) {
+    const reasons: string[] = [];
+    if (ethBotNeedsEditorReview === null && result.hasOtherParticipants) {
+      reasons.push("there are non-editor participants on the PR");
+    }
+    if (hasMergeConflicts) reasons.push("the PR has merge conflicts");
+    if (hasStagnantPreambleStatus) reasons.push("the preamble status is Stagnant");
+    result = {
+      ...result,
+      needsEditorAttention: false,
+      waitingSince: null,
+      reason: `Excluded from editor review because ${reasons.join(" and ")}.`,
     };
   }
 
@@ -334,4 +382,3 @@ export function categorizeResult(params: {
     subcategory,
   };
 }
-

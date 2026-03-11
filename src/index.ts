@@ -4,8 +4,12 @@ import { TARGET_REPOS, REPO_ORDER, BOT_LOGIN_SUFFIX } from "./config";
 import { loadEditors } from "./editors";
 import { extractAuthorsFromFiles } from "./authors";
 import { buildTimeline } from "./events";
+import { getEthBotReviewSignal } from "./ethBot";
 import { analyzeTimeline, categorizeResult, classifyPRType } from "./analysis";
-import { isPreambleStatusChangedOnly } from "./preamble";
+import {
+  extractUniqueStatusFromText,
+  isPreambleStatusChangedOnly,
+} from "./preamble";
 import { writeCsv, mergeCsvFiles, CsvRow } from "./csv";
 
 interface CliOptions {
@@ -154,6 +158,7 @@ async function main() {
         // Enrich fileChanges with a flag that indicates whether a modified
         // EIP/ERC/RIP file changed only its preamble `status:` line.
         const baseSha = prDetails.base?.sha ?? null;
+        let hasStagnantPreambleStatus = false;
 
         async function getFileContentAtRef(ref: string | null, filePath: string) {
           if (!ref) return null;
@@ -179,14 +184,21 @@ async function main() {
 
         for (const f of fileChanges) {
           if (
-            f.status === "modified" &&
             (f.filename.match(/EIPS\/eip-\d+\.md/i) ||
               f.filename.match(/ERCS\/erc-\d+\.md/i) ||
               f.filename.match(/RIPS\/rip-\d+\.md/i))
           ) {
+            const headText = await getFileContentAtRef(headSha, f.filename);
+            if (headText != null) {
+              const headStatus = extractUniqueStatusFromText(headText);
+              if (headStatus?.toLowerCase() === "stagnant") {
+                hasStagnantPreambleStatus = true;
+              }
+            }
+            if (f.status !== "modified") continue;
+
             // Fetch base and head contents. If either is missing, skip.
             const baseText = await getFileContentAtRef(baseSha, f.filename);
-            const headText = await getFileContentAtRef(headSha, f.filename);
             if (baseText == null || headText == null) {
               f.preambleStatusChangedOnly = false;
               continue;
@@ -235,6 +247,7 @@ async function main() {
         let analysis;
         let timeline: Awaited<ReturnType<typeof buildTimeline>> = [];
         let daysSinceLastActivity: number | null = null;
+        let ethBotNeedsEditorReview: boolean | null = null;
 
         if (!isDraft) {
           const authors = await extractAuthorsFromFiles({
@@ -262,6 +275,15 @@ async function main() {
 
           analysis = analyzeTimeline(timeline);
 
+          const ethBotReviewSignal = await getEthBotReviewSignal({
+            octokit,
+            owner,
+            repo,
+            pullNumber: prNumber,
+            editors,
+          });
+          ethBotNeedsEditorReview = ethBotReviewSignal?.needsEditorReview ?? null;
+
           const lastActivityTs =
             timeline.length > 0
               ? timeline[timeline.length - 1].timestamp
@@ -278,6 +300,7 @@ async function main() {
             waitingSince: null,
             lastEditorAction: null,
             lastAuthorAction: null,
+            hasOtherParticipants: false,
             reason: "This PR is in draft status.",
           };
           daysSinceLastActivity = daysOpen;
@@ -288,6 +311,9 @@ async function main() {
           classification,
           daysSinceLastActivity,
           prTitle,
+          ethBotNeedsEditorReview,
+          hasMergeConflicts: hasBranchConflict,
+          hasStagnantPreambleStatus,
         });
 
         const waitingSinceTs =

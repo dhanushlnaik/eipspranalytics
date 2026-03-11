@@ -1,7 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import { BOT_LOGIN_SUFFIX } from "./config";
 
-export type ActorRole = "EDITOR" | "AUTHOR";
+export type ActorRole = "EDITOR" | "AUTHOR" | "OTHER";
 
 export type EventSource =
   | "PR_OPENED"
@@ -52,17 +52,17 @@ export async function buildTimeline(params: {
   }
 
   const classifyRole = (login: string | null | undefined): ActorRole | null => {
-    if (!login) return null;
+    if (!login || isBot(login)) return null;
     const lower = login.toLowerCase();
     if (normalizedEditors.has(lower)) return "EDITOR";
     if (effectiveAuthors.has(lower)) return "AUTHOR";
-    return null;
+    return "OTHER";
   };
 
-  // PR opened event (treated as an author event if opener is an author).
+  // PR opened event.
   if (prAuthorLogin && !isBot(prAuthorLogin)) {
     const role = classifyRole(prAuthorLogin);
-    if (role === "AUTHOR") {
+    if (role) {
       events.push({
         actor: prAuthorLogin,
         role,
@@ -96,7 +96,6 @@ export async function buildTimeline(params: {
 
   for (const r of reviews) {
     const login = r.user?.login ?? null;
-    if (isBot(login)) continue;
     const role = classifyRole(login);
     if (!role) continue;
 
@@ -133,7 +132,6 @@ export async function buildTimeline(params: {
       if (data.length === 0) break;
       for (const c of data) {
         const login = c.user?.login ?? null;
-        if (isBot(login)) continue;
         const role = classifyRole(login);
         if (!role) continue;
         events.push({
@@ -163,7 +161,6 @@ export async function buildTimeline(params: {
       if (data.length === 0) break;
       for (const c of data) {
         const login = c.user?.login ?? null;
-        if (isBot(login)) continue;
         const role = classifyRole(login);
         if (!role) continue;
         events.push({
@@ -200,7 +197,6 @@ export async function buildTimeline(params: {
 
         // We only care about commits that can be attributed to a GitHub login in our author set.
         const githubLogin = commit.author?.login ?? commit.committer?.login ?? null;
-        if (isBot(githubLogin)) continue;
         const role = classifyRole(githubLogin);
         if (!role) continue;
 
@@ -227,4 +223,3 @@ export async function buildTimeline(params: {
 
   return events;
 }
-
