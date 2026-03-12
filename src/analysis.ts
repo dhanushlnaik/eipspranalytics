@@ -240,7 +240,6 @@ export function categorizeResult(params: {
   prTitle: string;
   ethBotNeedsEditorReview?: boolean | null;
   hasMergeConflicts?: boolean;
-  hasBlockingChecks?: boolean;
   hasStagnantPreambleStatus?: boolean;
 }): CategorizedResult {
   const {
@@ -250,7 +249,6 @@ export function categorizeResult(params: {
     prTitle,
     ethBotNeedsEditorReview = null,
     hasMergeConflicts = false,
-    hasBlockingChecks = false,
     hasStagnantPreambleStatus = false,
   } = params;
 
@@ -317,7 +315,6 @@ export function categorizeResult(params: {
     (
       (ethBotNeedsEditorReview === null && result.hasOtherParticipants) ||
       hasMergeConflicts ||
-      hasBlockingChecks ||
       hasStagnantPreambleStatus
     )
   ) {
@@ -326,7 +323,6 @@ export function categorizeResult(params: {
       reasons.push("there are non-editor participants on the PR");
     }
     if (hasMergeConflicts) reasons.push("the PR has merge conflicts");
-    if (hasBlockingChecks) reasons.push("some checks are still pending or failing");
     if (hasStagnantPreambleStatus) reasons.push("the preamble status is Stagnant");
     result = {
       ...result,

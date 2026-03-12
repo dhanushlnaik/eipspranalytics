@@ -8,7 +8,6 @@ import { createOctokit } from "../githubClient";
 import { REPO_ORDER, BOT_LOGIN_SUFFIX, MONGODB_URI, MONGODB_DATABASE } from "../config";
 import { loadEditors } from "../editors";
 import { extractAuthorsFromFiles } from "../authors";
-import { getHeadCheckState } from "../checks";
 import { buildTimeline } from "../events";
 import { getEthBotReviewSignal } from "../ethBot";
 import { analyzeTimeline, categorizeResult, classifyPRType } from "../analysis";
@@ -105,12 +104,6 @@ async function enrichOpenPR(
   const hasBranchConflict =
     (prDetails.mergeable_state ?? "").toLowerCase() === "dirty" ||
     prDetails.mergeable === false;
-  const { hasBlockingChecks } = await getHeadCheckState({
-    octokit,
-    owner,
-    repo,
-    ref: headSha,
-  });
   const isStatusChangeLike =
     /status|move|withdraw|finalize|supersede/i.test(prTitle);
   const prBody = prDetails.body ?? null;
@@ -259,7 +252,6 @@ async function enrichOpenPR(
     prTitle,
     ethBotNeedsEditorReview,
     hasMergeConflicts: hasBranchConflict,
-    hasBlockingChecks,
     hasStagnantPreambleStatus,
   });
   const waitingSince =

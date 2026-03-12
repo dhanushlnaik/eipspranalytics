@@ -8,6 +8,7 @@ export interface EthBotReviewSignal {
 }
 
 const ETH_BOT_LOGIN = "eth-bot";
+const ETH_BOT_BOT_LOGIN = "eth-bot[bot]";
 const HANDLE_REGEX = /@([A-Za-z0-9-]+)/g;
 const REVIEW_REQUEST_REGEX = /^Requires\s+\d+\s+more\s+reviewers?\s+from\s+(.+)$/im;
 
@@ -42,7 +43,10 @@ export async function getEthBotReviewSignal(params: {
   const ethBotComment = comments.find((comment) => {
     const login = comment.user?.login?.toLowerCase();
     const body = comment.body ?? "";
-    return login === ETH_BOT_LOGIN && REVIEW_REQUEST_REGEX.test(body);
+    return (
+      (login === ETH_BOT_LOGIN || login === ETH_BOT_BOT_LOGIN) &&
+      REVIEW_REQUEST_REGEX.test(body)
+    );
   });
 
   if (!ethBotComment) return null;
