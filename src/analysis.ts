@@ -121,8 +121,6 @@ export function analyzeTimeline(events: TimelineEvent[]): AnalysisResult {
   };
 }
 
-const STAGNANT_THRESHOLD_DAYS = 90;
-
 /** Tooling: title prefix or first word in PR body (CI, Bump, Config, Chore). */
 const TOOLING_TITLE_PREFIX = /^(CI|Bump|Config|Chore):/i;
 const TOOLING_FIRST_WORD = /^(CI|Bump|Config|Chore)$/i;
@@ -240,7 +238,6 @@ export function categorizeResult(params: {
   prTitle: string;
   ethBotNeedsEditorReview?: boolean | null;
   hasMergeConflicts?: boolean;
-  hasStagnantPreambleStatus?: boolean;
 }): CategorizedResult {
   const {
     result: baseResult,
@@ -249,7 +246,6 @@ export function categorizeResult(params: {
     prTitle,
     ethBotNeedsEditorReview = null,
     hasMergeConflicts = false,
-    hasStagnantPreambleStatus = false,
   } = params;
 
   // Start from the timeline-based result, but allow small domain-specific
@@ -312,18 +308,10 @@ export function categorizeResult(params: {
 
   if (
     result.needsEditorAttention &&
-    (
-      (ethBotNeedsEditorReview === null && result.hasOtherParticipants) ||
-      hasMergeConflicts ||
-      hasStagnantPreambleStatus
-    )
+    hasMergeConflicts
   ) {
     const reasons: string[] = [];
-    if (ethBotNeedsEditorReview === null && result.hasOtherParticipants) {
-      reasons.push("there are non-editor participants on the PR");
-    }
     if (hasMergeConflicts) reasons.push("the PR has merge conflicts");
-    if (hasStagnantPreambleStatus) reasons.push("the preamble status is Stagnant");
     result = {
       ...result,
       needsEditorAttention: false,
@@ -332,24 +320,10 @@ export function categorizeResult(params: {
     };
   }
 
-  const isStagnant =
-    !result.needsEditorAttention &&
-    daysSinceLastActivity !== null &&
-    daysSinceLastActivity >= STAGNANT_THRESHOLD_DAYS;
-
   // Determine subcategory based on attention state and stagnant status
   let subcategory: string;
-  
-  // For drafts: AWAITED when not stagnant, Stagnant when stagnant
-  if (classification.type === "DRAFT") {
-    if (isStagnant) {
-      subcategory = "Stagnant";
-    } else {
-      subcategory = "AWAITED";
-    }
-  } else if (isStagnant) {
-    subcategory = "Stagnant";
-  } else if (result.needsEditorAttention) {
+
+  if (result.needsEditorAttention) {
     subcategory = "Waiting on Editor";
   } else {
     subcategory = "Waiting on Author";

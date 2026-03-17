@@ -5,7 +5,7 @@ This document explains the current open-PR categorization and review-routing log
 - stricter `Status Change` detection
 - `eth-bot` review-comment parsing
 - editor-vs-author routing
-- exclusions for merge conflicts and `status: Stagnant`
+- exclusion for merge conflicts
 
 It is meant to answer: "what does this PR-processing flow do, and where is each part implemented?"
 
@@ -47,7 +47,7 @@ Each open PR ends up with:
 Common outputs:
 
 - Categories: `PR DRAFT`, `Typo`, `New EIP`, `Status Change`, `Website`, `Tooling`, `EIP-1`, `Content Edit`
-- Subcategories: `Waiting on Editor`, `Waiting on Author`, `Stagnant`, `AWAITED`
+- Subcategories: `Waiting on Editor`, `Waiting on Author`
 
 The board/API layer reads those stored values; it does not recompute the logic on every request.
 
@@ -234,24 +234,7 @@ Where:
 - [src/index.ts](/Users/dhanushlnaik/Workspace/Dev/Avarch/eipspranalytics/src/index.ts)
 - [src/mongo/import-job.ts](/Users/dhanushlnaik/Workspace/Dev/Avarch/eipspranalytics/src/mongo/import-job.ts)
 
-### 2. Preamble status is `Stagnant`
-
-If the current head version of a changed EIP/ERC/RIP file has preamble:
-
-- `status: Stagnant`
-
-then the PR is excluded from editor review.
-
-The status extraction uses:
-
-- [src/preamble.ts](/Users/dhanushlnaik/Workspace/Dev/Avarch/eipspranalytics/src/preamble.ts)
-
-and is applied in:
-
-- [src/index.ts](/Users/dhanushlnaik/Workspace/Dev/Avarch/eipspranalytics/src/index.ts)
-- [src/mongo/import-job.ts](/Users/dhanushlnaik/Workspace/Dev/Avarch/eipspranalytics/src/mongo/import-job.ts)
-
-### 3. Fallback non-editor-participant rule
+### 2. Fallback non-editor-participant rule
 
 There is still a fallback rule from the older logic:
 
@@ -283,12 +266,7 @@ Checks-based exclusion was briefly added, then removed. The current logic only u
 
 ## Draft handling
 
-Draft PRs skip most of the active editor/author routing logic.
-
-They are categorized as:
-
-- category: `PR DRAFT`
-- subcategory: `AWAITED` unless stagnant by time
+Draft PRs skip most of the active editor/author routing logic and are treated as waiting on authors.
 
 Draft handling is done in:
 
@@ -310,8 +288,7 @@ This combines:
 - PR type special cases
 - `eth-bot` reviewer routing
 - merge-conflict exclusion
-- `Stagnant` preamble exclusion
-- stagnant-by-time subcategory handling
+- two-state waiting subcategory (`Waiting on Editor` or `Waiting on Author`)
 
 This function produces the final:
 
@@ -349,7 +326,7 @@ Recent work in this area did the following:
 3. Added `eth-bot` reviewer-comment parsing.
 4. Made editor-review routing depend on whether `eth-bot` mentions only editors or also non-editors.
 5. Preserved the original last-activity decision tree after the `eth-bot` gate.
-6. Added exclusions for merge conflicts and preamble `status: Stagnant`.
+6. Added merge-conflict exclusion for editor-review routing.
 7. Explicitly left GitHub checks/review panels out of scope.
 
 If this logic changes again, this doc should be updated alongside:

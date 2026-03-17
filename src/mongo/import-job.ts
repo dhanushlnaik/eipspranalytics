@@ -12,7 +12,6 @@ import { buildTimeline } from "../events";
 import { getEthBotReviewSignal } from "../ethBot";
 import { analyzeTimeline, categorizeResult, classifyPRType } from "../analysis";
 import {
-  extractUniqueStatusFromText,
   isPreambleStatusChangedOnly,
 } from "../preamble";
 import {
@@ -111,7 +110,6 @@ async function enrichOpenPR(
   // Enrich fileChanges with a flag indicating whether a modified EIP/ERC/RIP file
   // changed only its preamble `status:` line (preamble-only change).
   const baseSha = prDetails.base?.sha ?? null;
-  let hasStagnantPreambleStatus = false;
 
   async function getFileContentAtRef(ref: string | null, filePath: string) {
     if (!ref) return null;
@@ -141,12 +139,6 @@ async function enrichOpenPR(
         f.filename.match(/RIPS\/rip-\d+\.md/i))
     ) {
       const headText = await getFileContentAtRef(headSha, f.filename);
-      if (headText != null) {
-        const headStatus = extractUniqueStatusFromText(headText);
-        if (headStatus?.toLowerCase() === "stagnant") {
-          hasStagnantPreambleStatus = true;
-        }
-      }
       if (f.status !== "modified") continue;
 
       const baseText = await getFileContentAtRef(baseSha, f.filename);
@@ -252,7 +244,6 @@ async function enrichOpenPR(
     prTitle,
     ethBotNeedsEditorReview,
     hasMergeConflicts: hasBranchConflict,
-    hasStagnantPreambleStatus,
   });
   const waitingSince =
     analysis.waitingSince != null ? new Date(analysis.waitingSince) : null;

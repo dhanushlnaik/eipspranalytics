@@ -7,7 +7,6 @@ import { buildTimeline } from "./events";
 import { getEthBotReviewSignal } from "./ethBot";
 import { analyzeTimeline, categorizeResult, classifyPRType } from "./analysis";
 import {
-  extractUniqueStatusFromText,
   isPreambleStatusChangedOnly,
 } from "./preamble";
 import { writeCsv, mergeCsvFiles, CsvRow } from "./csv";
@@ -158,7 +157,6 @@ async function main() {
         // Enrich fileChanges with a flag that indicates whether a modified
         // EIP/ERC/RIP file changed only its preamble `status:` line.
         const baseSha = prDetails.base?.sha ?? null;
-        let hasStagnantPreambleStatus = false;
 
         async function getFileContentAtRef(ref: string | null, filePath: string) {
           if (!ref) return null;
@@ -189,12 +187,6 @@ async function main() {
               f.filename.match(/RIPS\/rip-\d+\.md/i))
           ) {
             const headText = await getFileContentAtRef(headSha, f.filename);
-            if (headText != null) {
-              const headStatus = extractUniqueStatusFromText(headText);
-              if (headStatus?.toLowerCase() === "stagnant") {
-                hasStagnantPreambleStatus = true;
-              }
-            }
             if (f.status !== "modified") continue;
 
             // Fetch base and head contents. If either is missing, skip.
@@ -313,7 +305,6 @@ async function main() {
           prTitle,
           ethBotNeedsEditorReview,
           hasMergeConflicts: hasBranchConflict,
-          hasStagnantPreambleStatus,
         });
 
         const waitingSinceTs =
